@@ -5,6 +5,14 @@
 # Credentials
 credentials/
 
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Data / logs
+data/
+
 # Node
 node_modules/
 
