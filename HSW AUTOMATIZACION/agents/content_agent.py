@@ -4,7 +4,9 @@ Fetch RSS de fuentes LLM → scoring → draft de contenido x5 canales.
 """
 import json
 import os
+import re
 import feedparser
+import requests
 from datetime import datetime, timezone, timedelta
 from integrations.claude_client import score_news_item, generate_content_for_channel
 from dotenv import load_dotenv
@@ -25,7 +27,58 @@ RSS_FEEDS = [
 
 CHANNELS = ["facebook", "instagram", "tiktok", "youtube", "linkedin"]
 SCORE_THRESHOLD = 60   # Score mínimo para generar contenido
-HOURS_LOOKBACK  = 72   # Horas hacia atrás para buscar noticias
+HOURS_LOOKBACK  = 240  # TEMP: ampliado para testing (original: 72)
+
+
+def _extract_image_url(entry: dict, feed_url: str = "") -> str:
+    """Extrae imagen principal de un entry RSS: media, enclosure o og:image de la URL."""
+    # 1. media_content (Google, etc.)
+    for media in entry.get("media_content", []):
+        url = media.get("url", "")
+        if url and any(ext in url.lower() for ext in [".jpg", ".png", ".webp", ".jpeg"]):
+            return url
+
+    # 2. media_thumbnail
+    for thumb in entry.get("media_thumbnail", []):
+        url = thumb.get("url", "")
+        if url:
+            return url
+
+    # 3. enclosures (image type)
+    for enc in entry.get("enclosures", []):
+        if "image" in enc.get("type", ""):
+            return enc.get("href", enc.get("url", ""))
+
+    # 4. Imagen en el HTML del summary
+    summary_html = entry.get("summary", "") or entry.get("content", [{}])[0].get("value", "") if entry.get("content") else entry.get("summary", "")
+    if summary_html:
+        match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', summary_html)
+        if match:
+            return match.group(1)
+
+    # 5. Fallback: fetch og:image de la URL del artículo
+    link = entry.get("link", "")
+    if link:
+        try:
+            r = requests.get(link, timeout=10, headers={"User-Agent": "NexusIQ/1.0"})
+            if r.status_code == 200:
+                og_match = re.search(
+                    r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+                    r.text
+                )
+                if og_match:
+                    return og_match.group(1)
+                # Try reverse order (content before property)
+                og_match = re.search(
+                    r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+                    r.text
+                )
+                if og_match:
+                    return og_match.group(1)
+        except Exception:
+            pass
+
+    return ""
 
 
 def _load_seen() -> set:
@@ -88,12 +141,15 @@ def fetch_feeds() -> list:
                     or entry.get("description", "")
                 )[:500]
 
+                image_url = _extract_image_url(entry, feed_info["url"])
+
                 items.append({
                     "url": url,
                     "title": entry.get("title", ""),
                     "summary": summary,
                     "source": feed_info["name"],
-                    "published": entry.get("published", "")
+                    "published": entry.get("published", ""),
+                    "image_url": image_url
                 })
 
             print(f"[CONTENT] {feed_info['name']}: {len(feed.entries)} entradas")
@@ -171,6 +227,7 @@ def run() -> list:
                 "title": item["title"],
                 "source": item["source"],
                 "published": item["published"],
+                "image_url": item.get("image_url", ""),
                 "score": score,
                 "prioridad": prioridad,
                 "pillar": evaluation.get("pillar", ""),

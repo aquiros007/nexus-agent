@@ -167,8 +167,13 @@ def _publish_to_channel(canal: str, text: str, item: dict) -> dict:
         return {"error": "YouTube requiere video_path"}
 
     elif canal == "linkedin":
-        from publishers.linkedin import publish_text_post
-        return publish_text_post(text)
+        image_url = item.get("image_url", "")
+        if image_url:
+            from publishers.linkedin import publish_post_with_image
+            return publish_post_with_image(text, image_url, title=item.get("title", "")[:100])
+        else:
+            from publishers.linkedin import publish_text_post
+            return publish_text_post(text)
 
     return {"error": f"Canal desconocido: {canal}"}
 

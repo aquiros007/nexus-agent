@@ -106,6 +106,20 @@ def generate_content_for_channel(
         "linkedin": "Post LinkedIn. Hook <200 chars antes del 'ver más'. Formato con → para listas. Perspectiva personal de Abel. Pregunta de cierre que genere debate real. CTA WhatsApp. Máx 5 hashtags."
     }
 
+    channel_system = None
+    if channel == "linkedin":
+        channel_system = NEXUS_SYSTEM_PROMPT + """
+
+INSTRUCCIONES ADICIONALES PARA LINKEDIN (linkedin-voice-publisher):
+- Hook potente en <200 caracteres ANTES del "ver más" de LinkedIn. Debe generar curiosidad o tensión.
+- Usa → para listas en lugar de bullets o números.
+- Escribe en perspectiva personal de Abel Quirós, desde experiencia real y directa con clientes en LATAM.
+- Incluye observaciones concretas ("He trabajado con...", "En los últimos meses vi que...") — nunca genéricas.
+- Pregunta de cierre que genere debate real entre ejecutivos, no preguntas retóricas obvias.
+- CTA al final: https://wa.me/message/6Q5VSRREEPF2P1
+- Máximo 5 hashtags, siempre incluir #NexusIQ.
+- NO uses emojis. NO uses formato bold (**texto**). Usa saltos de línea para respirar."""
+
     prompt = f"""Genera contenido para {channel.upper()} basado en esta noticia.
 
 NOTICIA: {title}
@@ -122,7 +136,7 @@ Retorna JSON:
   "notas": <string: recomendaciones de producción si aplica, ej: "usar imagen de OpenAI blog">
 }}"""
 
-    return ask_json(prompt)
+    return ask_json(prompt, system=channel_system)
 
 
 def classify_interaction(
